@@ -204,6 +204,16 @@
 #define PTE_StLba			8		/* MBR PTE: Start in LBA */
 #define PTE_SizLba			12		/* MBR PTE: Size in LBA */
 
+#define PSVITA_MBR_Table		80		/* PSVita MBR: Offset of partition table in the MBR */
+#define PSVITA_SZ_PTE			17		/* PSVita MBR: Size of a partition table entry */
+#define PSVITA_PTE_Offset		0		/* PSVita MBR PTE: Offset */
+#define PSVITA_PTE_Size			4		/* PSVita MBR PTE: Size */
+#define PSVITA_PTE_Code			8		/* PSVita MBR PTE: Code */
+#define PSVITA_PTE_Type			9		/* PSVita MBR PTE: Type */
+#define PSVITA_PTE_Active		10		/* PSVita MBR PTE: Active */
+#define PSVITA_PTE_Flags		11		/* PSVita MBR PTE: Flags */
+#define PSVITA_PTE_Unk			15		/* PSVita MBR PTE: Unknown */
+
 #define GPTH_Sign			0		/* GPT: Header signature (8-byte) */
 #define GPTH_Rev			8		/* GPT: Revision (DWORD) */
 #define GPTH_Size			12		/* GPT: Header size (DWORD) */
@@ -3319,8 +3329,11 @@ static UINT find_volume (	/* Returns BS status found in the hosting drive */
 )
 {
 	UINT fmt, i;
+#if FF_PSVITA_MC_MBR
+	DWORD mbr_pt[16];
+#else
 	DWORD mbr_pt[4];
-
+#endif
 
 	fmt = check_fs(fs, 0);				/* Load sector 0 and check if it is an FAT VBR as SFD */
 	if (fmt != 2 && (fmt >= 3 || part == 0)) return fmt;	/* Returns if it is a FAT VBR as auto scan, not a BS or disk error */
@@ -3357,6 +3370,19 @@ static UINT find_volume (	/* Returns BS status found in the hosting drive */
 	do {							/* Find an FAT volume */
 		fmt = mbr_pt[i] ? check_fs(fs, mbr_pt[i]) : 3;	/* Check if the partition is FAT */
 	} while (part == 0 && fmt >= 2 && ++i < 4);
+
+#if FF_PSVITA_MC_MBR
+	if (fmt == 3) {
+		for (i = 0; i < 16; i++) {
+			mbr_pt[i] = ld_dword(fs->win + PSVITA_MBR_Table + i * PSVITA_SZ_PTE + PSVITA_PTE_Offset);
+		}
+		i = part ? part - 1 : 0;		/* Table index to find first */
+		do {							/* Find an FAT volume */
+			fmt = mbr_pt[i] ? check_fs(fs, mbr_pt[i]) : 3;	/* Check if the partition is FAT */
+		} while (part == 0 && fmt >= 2 && ++i < 16);
+	}
+#endif
+
 	return fmt;
 }
 
@@ -3451,8 +3477,9 @@ static FRESULT mount_volume (	/* FR_OK(0): successful, !=0: an error occurred */
 		fs->fsize = ld_dword(fs->win + BPB_FatSzEx);	/* Number of sectors per FAT */
 
 		fs->n_fats = fs->win[BPB_NumFATsEx];			/* Number of FATs */
+#if !FF_PSVITA_MC_MBR
 		if (fs->n_fats != 1) return FR_NO_FILESYSTEM;	/* (Supports only 1 FAT) */
-
+#endif
 		fs->csize = 1 << fs->win[BPB_SecPerClusEx];		/* Cluster size */
 		if (fs->csize == 0)	return FR_NO_FILESYSTEM;	/* (Must be 1..32768) */
 

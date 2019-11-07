@@ -215,6 +215,9 @@
 /  To enable Trim function, also CTRL_TRIM command should be implemented to the
 /  disk_ioctl() function. */
 
+#define FF_PSVITA_MC_MBR	0
+/* This option switches support for PlayStation Vita's custom MBR format.
+/  (0:Disable or 1:Enable) */
 
 
 /*---------------------------------------------------------------------------/
